@@ -27,7 +27,7 @@ jobs:
       - name: Create Entities in Port
         run: |
           access_token="${{ env.ACCESS_TOKEN }}"
-          json=$(cat response.json)
+          json=$(cat response_1743508042248.json)
       
           echo "$json" | jq -c '.[]' | while read -r block; do
             identifier=$(echo "$block" | jq -r '.id')
