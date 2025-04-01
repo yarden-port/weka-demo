@@ -30,31 +30,59 @@ jobs:
           json=$(cat response_1743508042248.json)
       
           echo "$json" | jq -c '.[]' | while read -r block; do
-            identifier=$(echo "$block" | jq -r '.id')
-            title=$(echo "$block" | jq -r '.type')
-            echo "Creating entity: $identifier ($title)"
+            identifier=$(echo "$block" | jq -r '.system_id')
+            title=$(echo "$block" | jq -r '.hostname // .system_id')
       
+            payload=$(jq -n \
+              --arg id "$identifier" \
+              --arg title "$title" \
+              --arg status_message "$(echo "$block" | jq -r '.status_message // empty')" \
+              --arg owner "$(echo "$block" | jq -r '.owner // empty')" \
+              --arg distro_series "$(echo "$block" | jq -r '.distro_series // empty')" \
+              --arg hostname "$(echo "$block" | jq -r '.hostname // empty')" \
+              --arg power_state "$(echo "$block" | jq -r '.power_state // empty')" \
+              --arg osystem "$(echo "$block" | jq -r '.osystem // empty')" \
+              --arg status_name "$(echo "$block" | jq -r '.status_name // empty')" \
+              --arg fqdn "$(echo "$block" | jq -r '.fqdn // empty')" \
+              --arg system_id "$identifier" \
+              --arg zone "$(echo "$block" | jq -r '.zone // empty')" \
+              --arg pool "$(echo "$block" | jq -r '.pool // empty')" \
+              --arg rack "$(echo "$block" | jq -r '.rack // empty')" \
+              --argjson locked "$(echo "$block" | jq '.locked // false')" \
+              --argjson supports_eth_ha "$(echo "$block" | jq '.supports_eth_ha // false')" \
+              --argjson supports_ib_ha "$(echo "$block" | jq '.supports_ib_ha // false')" \
+              --argjson tags "$(echo "$block" | jq '.tags // []')" \
+              --argjson IPs "$(echo "$block" | jq '.IPs // []')" \
+              '{
+                identifier: $id,
+                title: $title,
+                blueprint: "block",
+                properties: {
+                  status_message: $status_message,
+                  owner: $owner,
+                  locked: $locked,
+                  distro_series: $distro_series,
+                  hostname: $hostname,
+                  power_state: $power_state,
+                  osystem: $osystem,
+                  status_name: $status_name,
+                  fqdn: $fqdn,
+                  system_id: $system_id,
+                  zone: $zone,
+                  pool: $pool,
+                  rack: $rack,
+                  supports_eth_ha: $supports_eth_ha,
+                  supports_ib_ha: $supports_ib_ha,
+                  tags: $tags,
+                  IPs: $IPs
+                }
+              }')
+      
+            echo "Creating entity: $identifier ($title)"
             curl -s -L -X POST "https://api.getport.io/v1/blueprints/block/entities" \
-            -H "Authorization: Bearer $access_token" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "identifier": "'"${identifier}"'",
-              "title": "'"${title}"'",
-              "blueprint": "block",
-              "properties": {
-                "id": "'"${identifier}"'",
-                "type": "'"$(echo "$block" | jq -r '.type')"'", 
-                "title": "'"$(echo "$block" | jq -r '.title // empty')"'", 
-                "status": "'"$(echo "$block" | jq -r '.status // empty')"'", 
-                "status_message": "'"$(echo "$block" | jq -r '.status_message // empty')"'", 
-                "log_stream": "'"$(echo "$block" | jq -r '.log_stream // empty')"'", 
-                "step_identifier": "'"$(echo "$block" | jq -r '.step_identifier // empty')"'", 
-                "run_id": "'"$(echo "$block" | jq -r '.run_id // empty')"'", 
-                "message": "'"$(echo "$block" | jq -r '.message // empty')"'", 
-                "terminationStatus": "'"$(echo "$block" | jq -r '.terminationStatus // empty')"'", 
-                "statusLabel": "'"$(echo "$block" | jq -r '.statusLabel // empty')"'"
-              }
-            }'
-
+              -H "Authorization: Bearer $access_token" \
+              -H "Content-Type: application/json" \
+              -d "$payload"
+      
           done
 
