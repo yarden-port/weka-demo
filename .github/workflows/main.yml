@@ -13,11 +13,6 @@ jobs:
       - name: Install jq
         run: sudo apt-get install -y jq
 
-      - name: Read and parse blocks from file
-        id: parse-json
-        run: |
-          cat .github/data/response.json | jq -c '.[]' > blocks.txt
-
       - name: Generate Access Token
         id: get-token
         run: |
@@ -31,13 +26,16 @@ jobs:
 
       - name: Create Entities in Port
         run: |
-          while IFS= read -r block; do
+          access_token="${{ env.ACCESS_TOKEN }}"
+          json=$(cat response.json)
+      
+          echo "$json" | jq -c '.[]' | while read -r block; do
             identifier=$(echo "$block" | jq -r '.id')
             title=$(echo "$block" | jq -r '.type')
             echo "Creating entity: $identifier ($title)"
-
+      
             curl -s -L -X POST "https://api.getport.io/v1/blueprints/block/entities" \
-              -H "Authorization: Bearer $ACCESS_TOKEN" \
+              -H "Authorization: Bearer $access_token" \
               -H "Content-Type: application/json" \
               -d '{
                 "identifier": "'"${identifier}"'",
@@ -47,4 +45,5 @@ jobs:
                   "type": "'"${title}"'"
                 }
               }'
-          done < blocks.txt
+          done
+
