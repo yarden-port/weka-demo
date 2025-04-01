@@ -35,15 +35,26 @@ jobs:
             echo "Creating entity: $identifier ($title)"
       
             curl -s -L -X POST "https://api.getport.io/v1/blueprints/block/entities" \
-              -H "Authorization: Bearer $access_token" \
-              -H "Content-Type: application/json" \
-              -d '{
-                "identifier": "'"${identifier}"'",
-                "title": "'"${title}"'",
-                "blueprint": "block",
-                "properties": {
-                  "type": "'"${title}"'"
-                }
-              }'
+            -H "Authorization: Bearer $access_token" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "identifier": "'"${identifier}"'",
+              "title": "'"${title}"'",
+              "blueprint": "block",
+              "properties": {
+                "id": "'"${identifier}"'",
+                "type": "'"$(echo "$block" | jq -r '.type')"'", 
+                "title": "'"$(echo "$block" | jq -r '.title // empty')"'", 
+                "status": "'"$(echo "$block" | jq -r '.status // empty')"'", 
+                "status_message": "'"$(echo "$block" | jq -r '.status_message // empty')"'", 
+                "log_stream": "'"$(echo "$block" | jq -r '.log_stream // empty')"'", 
+                "step_identifier": "'"$(echo "$block" | jq -r '.step_identifier // empty')"'", 
+                "run_id": "'"$(echo "$block" | jq -r '.run_id // empty')"'", 
+                "message": "'"$(echo "$block" | jq -r '.message // empty')"'", 
+                "terminationStatus": "'"$(echo "$block" | jq -r '.terminationStatus // empty')"'", 
+                "statusLabel": "'"$(echo "$block" | jq -r '.statusLabel // empty')"'"
+              }
+            }'
+
           done
 
