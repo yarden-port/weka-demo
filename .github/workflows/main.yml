@@ -1,0 +1,50 @@
+name: Create Port Entities from JSON
+
+on:
+  workflow_dispatch:
+
+jobs:
+  create-port-entities:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Read and parse blocks from file
+        id: parse-json
+        run: |
+          cat response_1743508042248.json | jq -c '.blocks[]' > blocks.txt
+
+      - name: Generate Access Token
+        id: get-token
+        run: |
+          access_token=$(curl --location --request POST 'https://api.getport.io/v1/auth/access_token' \
+            --header 'Content-Type: application/json' \
+            --data-raw '{
+              "clientId": "${{ secrets.PORT_CLIENT_ID }}",
+              "clientSecret": "${{ secrets.PORT_CLIENT_SECRET }}"
+            }' | jq -r '.accessToken')
+          echo "ACCESS_TOKEN=$access_token" >> $GITHUB_ENV
+
+      - name: Create Entities in Port
+        run: |
+          while IFS= read -r block; do
+            identifier=$(echo "$block" | jq -r '.id')
+            title=$(echo "$block" | jq -r '.type')
+            echo "Creating entity: $identifier ($title)"
+
+            curl -s -L -X POST "https://api.getport.io/v1/blueprints/block/entities" \
+              -H "Authorization: Bearer $ACCESS_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "identifier": "'"${identifier}"'",
+                "title": "'"${title}"'",
+                "blueprint": "block",
+                "properties": {
+                  "type": "'"${title}"'"
+                }
+              }'
+          done < blocks.txt
