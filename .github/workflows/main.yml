@@ -16,7 +16,7 @@ jobs:
       - name: Read and parse blocks from file
         id: parse-json
         run: |
-          cat response_1743508042248.json | jq -c '.blocks[]' > blocks.txt
+          cat .github/data/response.json | jq -c '.[]' > blocks.txt
 
       - name: Generate Access Token
         id: get-token
