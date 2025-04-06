@@ -1,0 +1,35 @@
+name: Send JSON Blocks to Port Webhook
+
+on:
+  workflow_dispatch:
+
+jobs:
+  send-json-to-port-webhook:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Fetch JSON and Send to Webhook
+        env:
+          PORT_WEBHOOK_URL: https://ingest.getport.io/N29knvwPStVAcYnu
+        run: |
+          # You can either fetch from a URL or use a local file
+          # Option 1: Fetch JSON from remote endpoint
+          json=$(curl -s -L "https://your.api/endpoint/json")
+
+          # Option 2 (fallback): Use local file
+          # json=$(cat response.json)
+
+          echo "$json" | jq -c '.[]' | while read -r block; do
+            echo "Sending block to Port webhook:"
+            echo "$block"
+
+            curl -s -X POST "$PORT_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d "$block"
+          done
