@@ -49,12 +49,12 @@ jobs:
             current_entity=$(jq -c --arg id "$id" '.[$id] // empty' current_map.json)
 
             if [ -z "$current_entity" ]; then
-              op="create/update"
+              op="upsert"
               echo "🆕 $id - creating"
             else
               old_checksum=$(echo "$current_entity" | jq '{body: .properties}' | jq -S . | sha256sum | cut -d " " -f1)
               if [ "$checksum" != "$old_checksum" ]; then
-                op="create/update"
+                op="upsert"
                 echo "🔁 $id - updating"
               else
                 echo "✅ $id - unchanged"
