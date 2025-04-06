@@ -20,10 +20,10 @@ jobs:
         run: |
           # You can either fetch from a URL or use a local file
           # Option 1: Fetch JSON from remote endpoint
-          json=$(curl -s -L "https://your.api/endpoint/json")
+          # json=$(curl -s -L "https://your.api/endpoint/json")
 
           # Option 2 (fallback): Use local file
-          # json=$(cat response.json)
+          json=$(cat response.json)
 
           echo "$json" | jq -c '.[]' | while read -r block; do
             echo "Sending block to Port webhook:"
