@@ -34,7 +34,7 @@ jobs:
 
           echo "🔄 Fetching desired entities from API..."
           #desired_json=$(curl -s "https://your.api/endpoint/json")
-          desired_json=$(cat response_1743508042248)  # optional file fallback
+          desired_json=$(cat response_1743508042248.json)  # optional file fallback
 
           echo "📥 Fetching current Port entities..."
           current_json=$(curl -s -L "https://api.getport.io/v1/blueprints/block/entities" \
