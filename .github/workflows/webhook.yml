@@ -16,7 +16,7 @@ jobs:
 
       - name: Fetch JSON and Send to Webhook
         env:
-          PORT_WEBHOOK_URL: https://ingest.getport.io/iMDkdJ9Q1NmZcSUW
+          PORT_WEBHOOK_URL: https://ingest.getport.io/N29knvwPStVAcYnu
         run: |
           # You can either fetch from a URL or use a local file
           # Option 1: Fetch JSON from remote endpoint
