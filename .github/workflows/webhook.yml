@@ -23,7 +23,7 @@ jobs:
           # json=$(curl -s -L "https://your.api/endpoint/json")
 
           # Option 2 (fallback): Use local file
-          json=$(cat response.json)
+          json=$(cat response_1743508042248.json)
 
           echo "$json" | jq -c '.[]' | while read -r block; do
             echo "Sending block to Port webhook:"
