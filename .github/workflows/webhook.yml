@@ -47,73 +47,77 @@ jobs:
           skipped=0
           deleted=0
 
-          # Main sync loop
-          while read -r block; do
-            id=$(echo "$block" | jq -r '.system_id')
-            current_entity=$(jq -c --arg id "$id" '.[$id] // empty' current_map.json)
+          # Main sync loop (create/update)
+          {
+            while read -r block; do
+              id=$(echo "$block" | jq -r '.system_id')
+              current_entity=$(jq -c --arg id "$id" '.[$id] // empty' current_map.json)
 
-            desired_props=$(echo "$block" | jq '{
-              status_message,
-              owner,
-              locked,
-              distro_series,
-              hostname,
-              power_state,
-              osystem,
-              status_name,
-              fqdn,
-              system_id,
-              zone,
-              pool,
-              rack,
-              supports_eth_ha,
-              supports_ib_ha,
-              tags,
-              IPs
-            }')
-            checksum=$(echo "$desired_props" | jq -S . | sha256sum | cut -d " " -f1)
+              desired_props=$(echo "$block" | jq '{
+                status_message,
+                owner,
+                locked,
+                distro_series,
+                hostname,
+                power_state,
+                osystem,
+                status_name,
+                fqdn,
+                system_id,
+                zone,
+                pool,
+                rack,
+                supports_eth_ha,
+                supports_ib_ha,
+                tags,
+                IPs
+              }')
+              checksum=$(echo "$desired_props" | jq -S . | sha256sum | cut -d " " -f1)
 
-            if [ -z "$current_entity" ]; then
-              op="create/update"
-              echo "🆕 $id - creating"
-              ((created++))
-            else
-              old_checksum=$(echo "$current_entity" | jq '.properties' | jq -S . | sha256sum | cut -d " " -f1)
-              if [ "$checksum" != "$old_checksum" ]; then
+              if [ -z "$current_entity" ]; then
                 op="create/update"
-                echo "🔁 $id - updating"
-                ((updated++))
+                echo "🆕 $id - creating"
+                ((created++))
               else
-                echo "✅ $id - unchanged"
-                ((skipped++))
-                continue
+                old_checksum=$(echo "$current_entity" | jq '.properties' | jq -S . | sha256sum | cut -d " " -f1)
+                if [ "$checksum" != "$old_checksum" ]; then
+                  op="create/update"
+                  echo "🔁 $id - updating"
+                  ((updated++))
+                else
+                  echo "✅ $id - unchanged"
+                  ((skipped++))
+                  continue
+                fi
               fi
-            fi
 
-            updated_block=$(echo "$block" | jq --arg op "$op" '. + {operation: $op}')
-            curl -s -X POST "$PORT_WEBHOOK_URL" \
-              -H "Content-Type: application/json" \
-              -d "$updated_block"
-          done < <(jq -c '.[]' "$desired_file")
+              updated_block=$(echo "$block" | jq --arg op "$op" '. + {operation: $op}')
+              curl -s -X POST "$PORT_WEBHOOK_URL" \
+                -H "Content-Type: application/json" \
+                -d "$updated_block"
+            done
+          } < <(jq -c '.[]' "$desired_file") || true
 
           # Deletion loop
           jq -r '.[].system_id' "$desired_file" > desired_ids.txt
 
-          while read -r current_id; do
-            if ! grep -Fxq "$current_id" desired_ids.txt; then
-              echo "❌ $current_id not in desired state - sending delete"
-              ((deleted++))
-              jq -n \
-                --arg id "$current_id" \
-                --arg op "delete" \
-                '{
-                  system_id: $id,
-                  operation: $op
-                }' | curl -s -X POST "$PORT_WEBHOOK_URL" \
-                  -H "Content-Type: application/json" \
-                  -d @-
-            fi
-          done < <(jq -r '.entities[].identifier' <<< "$current_json")
+          {
+            while read -r current_id; do
+              if ! grep -Fxq "$current_id" desired_ids.txt; then
+                echo "❌ $current_id not in desired state - sending delete"
+                ((deleted++))
+                jq -n \
+                  --arg id "$current_id" \
+                  --arg op "delete" \
+                  '{
+                    system_id: $id,
+                    operation: $op
+                  }' | curl -s -X POST "$PORT_WEBHOOK_URL" \
+                    -H "Content-Type: application/json" \
+                    -d @-
+              fi
+            done
+          } < <(echo "$current_json" | jq -r '.entities[].identifier') || true
 
           echo "✅ Sync Complete"
           echo "Created: $created"
