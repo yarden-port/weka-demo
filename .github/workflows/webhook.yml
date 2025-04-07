@@ -46,7 +46,7 @@ jobs:
           skipped=0
           deleted=0
 
-          echo "$desired_json" | jq -c '.[]' | while read -r block; do
+          jq -c '.[]' response_1743508042248.json | while read -r block; do
             id=$(echo "$block" | jq -r '.system_id')
             current_entity=$(jq -c --arg id "$id" '.[$id] // empty' current_map.json)
 
