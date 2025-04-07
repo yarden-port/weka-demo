@@ -30,9 +30,12 @@ jobs:
           PORT_WEBHOOK_URL: https://ingest.getport.io/N29knvwPStVAcYnu
         run: |
           set -e
+          trap '' SIGPIPE
 
           echo "🔄 Fetching desired entities from file..."
-          desired_json=$(cat response_1743508042248.json)
+          # You can switch to API here if needed:
+          # curl -s https://your.api/endpoint.json > desired.json
+          desired_file="response_1743508042248.json"
 
           echo "📥 Fetching current Port entities..."
           current_json=$(curl -s -L "https://api.getport.io/v1/blueprints/block/entities" \
@@ -46,11 +49,11 @@ jobs:
           skipped=0
           deleted=0
 
-          jq -c '.[]' response_1743508042248.json | while read -r block; do
+          jq -c '.[]' "$desired_file" | while read -r block; do
             id=$(echo "$block" | jq -r '.system_id')
             current_entity=$(jq -c --arg id "$id" '.[$id] // empty' current_map.json)
 
-            # Extract only properties (same keys as your mapping)
+            # Normalize fields used in mapping
             desired_props=$(echo "$block" | jq '{
               status_message,
               owner,
@@ -93,9 +96,10 @@ jobs:
             curl -s -X POST "$PORT_WEBHOOK_URL" \
               -H "Content-Type: application/json" \
               -d "$updated_block"
-          done
+          done || true
 
-          echo "$desired_json" | jq -r '.[].system_id' > desired_ids.txt
+          # Track which entities to keep
+          jq -r '.[].system_id' "$desired_file" > desired_ids.txt
 
           echo "$current_json" | jq -r '.entities[].identifier' | while read -r current_id; do
             if ! grep -Fxq "$current_id" desired_ids.txt; then
@@ -111,7 +115,7 @@ jobs:
                   -H "Content-Type: application/json" \
                   -d @-
             fi
-          done
+          done || true
 
           echo "✅ Sync Complete"
           echo "Created: $created"
