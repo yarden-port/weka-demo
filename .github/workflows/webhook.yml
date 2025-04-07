@@ -35,8 +35,7 @@ jobs:
           echo "PORT_ACCESS_TOKEN=$token" >> $GITHUB_ENV
 
       - name: Fetch new source (replace with API call if needed)
-        run: |
-          cp response_1743508042248.json new_source.json
+        run: cp response_1743508042248.json new_source.json
 
       - name: Prepare lookup maps
         run: |
@@ -54,60 +53,63 @@ jobs:
           updated=0
           deleted=0
 
-          # Read maps into variables
           new_map=$(cat new_map.json)
           old_map=$(cat old_map.json)
 
-          # Check create or update
-          echo "$new_map" | jq -c 'to_entries[]' | while read -r entry; do
-            id=$(echo "$entry" | jq -r '.key')
-            new_block=$(echo "$entry" | jq -c '.value')
-            old_block=$(echo "$old_map" | jq -c --arg id "$id" '.[$id] // empty')
+          {
+            echo "$new_map" | jq -c 'to_entries[]' | while read -r entry; do
+              id=$(echo "$entry" | jq -r '.key')
+              new_block=$(echo "$entry" | jq -c '.value')
+              old_block=$(echo "$old_map" | jq -c --arg id "$id" '.[$id] // empty')
 
-            if [ -z "$old_block" ] || [ "$old_block" = "null" ]; then
-              echo "🆕 $id - creating"
-              ((created++))
-              op="create/update"
-            else
-              new_hash=$(echo "$new_block" | jq -S . | sha256sum | cut -d " " -f1)
-              old_hash=$(echo "$old_block" | jq -S . | sha256sum | cut -d " " -f1)
-              if [ "$new_hash" != "$old_hash" ]; then
-                echo "🔁 $id - updating"
-                ((updated++))
+              if [ -z "$old_block" ] || [ "$old_block" = "null" ]; then
+                echo "🆕 $id - creating"
+                ((created++))
                 op="create/update"
               else
-                continue
+                new_hash=$(echo "$new_block" | jq -S . | sha256sum | cut -d " " -f1)
+                old_hash=$(echo "$old_block" | jq -S . | sha256sum | cut -d " " -f1)
+                if [ "$new_hash" != "$old_hash" ]; then
+                  echo "🔁 $id - updating"
+                  ((updated++))
+                  op="create/update"
+                else
+                  continue
+                fi
               fi
-            fi
 
-            echo "$new_block" | jq --arg op "$op" '. + {operation: $op}' | \
-              curl -s -X POST "$PORT_WEBHOOK_URL" \
-                -H "Content-Type: application/json" \
-                -d @-
-          done || true
+              echo "$new_block" | jq --arg op "$op" '. + {operation: $op}' | \
+                curl -s -X POST "$PORT_WEBHOOK_URL" \
+                  -H "Content-Type: application/json" \
+                  -d @-
+            done
+          } || true
 
-          # Check deletions
-          echo "$old_map" | jq -r 'keys[]' | while read -r old_id; do
-            if ! echo "$new_map" | jq -e --arg id "$old_id" 'has($id)' > /dev/null; then
-              echo "❌ $old_id - sending delete"
-              ((deleted++))
-              jq -n --arg id "$old_id" --arg op "delete" '{
-                system_id: $id,
-                operation: $op
-              }' | curl -s -X POST "$PORT_WEBHOOK_URL" \
-                -H "Content-Type: application/json" \
-                -d @-
-            fi
-          done || true
+          {
+            echo "$old_map" | jq -r 'keys[]' | while read -r old_id; do
+              if ! echo "$new_map" | jq -e --arg id "$old_id" 'has($id)' > /dev/null; then
+                echo "❌ $old_id - sending delete"
+                ((deleted++))
+                jq -n --arg id "$old_id" --arg op "delete" '{
+                  system_id: $id,
+                  operation: $op
+                }' | curl -s -X POST "$PORT_WEBHOOK_URL" \
+                    -H "Content-Type: application/json" \
+                    -d @-
+              fi
+            done
+          } || true
 
           echo "✅ Sync complete"
           echo "Created: $created"
           echo "Updated: $updated"
           echo "Deleted: $deleted"
 
-      - name: Save current source to cache
+      - name: Save current source as last_sync.json
+        run: cp new_source.json last_sync.json
+
+      - name: Cache current source
         uses: actions/cache@v3
         with:
           path: last_sync.json
           key: port-sync-cache-${{ runner.os }}
-        run: cp new_source.json last_sync.json
