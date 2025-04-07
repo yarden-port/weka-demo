@@ -23,18 +23,16 @@ jobs:
               "clientId": "${{ secrets.PORT_CLIENT_ID }}",
               "clientSecret": "${{ secrets.PORT_CLIENT_SECRET }}"
             }' | jq -r '.accessToken')
-          echo "ACCESS_TOKEN=$token" >> $GITHUB_ENV
+          echo "PORT_ACCESS_TOKEN=$token" >> $GITHUB_ENV
 
       - name: Sync Entities
         env:
           PORT_WEBHOOK_URL: https://ingest.getport.io/N29knvwPStVAcYnu
-          PORT_ACCESS_TOKEN: ${{ env.ACCESS_TOKEN }}
         run: |
           set -e
 
-          echo "🔄 Fetching desired entities from API..."
-          #desired_json=$(curl -s "https://your.api/endpoint/json")
-          desired_json=$(cat response_1743508042248.json)  # optional file fallback
+          echo "🔄 Fetching desired entities from file..."
+          desired_json=$(cat response_1743508042248.json)
 
           echo "📥 Fetching current Port entities..."
           current_json=$(curl -s -L "https://api.getport.io/v1/blueprints/block/entities" \
@@ -43,26 +41,54 @@ jobs:
 
           echo "$current_json" | jq -c '.entities[]' | jq -s 'map({(.identifier): .}) | add' > current_map.json
 
+          created=0
+          updated=0
+          skipped=0
+          deleted=0
+
           echo "$desired_json" | jq -c '.[]' | while read -r block; do
             id=$(echo "$block" | jq -r '.system_id')
-            checksum=$(echo "$block" | jq -S . | sha256sum | cut -d " " -f1)
             current_entity=$(jq -c --arg id "$id" '.[$id] // empty' current_map.json)
 
+            # Extract only properties (same keys as your mapping)
+            desired_props=$(echo "$block" | jq '{
+              status_message,
+              owner,
+              locked,
+              distro_series,
+              hostname,
+              power_state,
+              osystem,
+              status_name,
+              fqdn,
+              system_id,
+              zone,
+              pool,
+              rack,
+              supports_eth_ha,
+              supports_ib_ha,
+              tags,
+              IPs
+            }')
+            checksum=$(echo "$desired_props" | jq -S . | sha256sum | cut -d " " -f1)
+
             if [ -z "$current_entity" ]; then
-              op="upsert"
+              op="create/update"
               echo "🆕 $id - creating"
+              ((created++))
             else
-              old_checksum=$(echo "$current_entity" | jq '{body: .properties}' | jq -S . | sha256sum | cut -d " " -f1)
+              old_checksum=$(echo "$current_entity" | jq '.properties' | jq -S . | sha256sum | cut -d " " -f1)
               if [ "$checksum" != "$old_checksum" ]; then
-                op="upsert"
+                op="create/update"
                 echo "🔁 $id - updating"
+                ((updated++))
               else
                 echo "✅ $id - unchanged"
+                ((skipped++))
                 continue
               fi
             fi
 
-            # Add operation to body and send it
             updated_block=$(echo "$block" | jq --arg op "$op" '. + {operation: $op}')
             curl -s -X POST "$PORT_WEBHOOK_URL" \
               -H "Content-Type: application/json" \
@@ -74,6 +100,7 @@ jobs:
           echo "$current_json" | jq -r '.entities[].identifier' | while read -r current_id; do
             if ! grep -Fxq "$current_id" desired_ids.txt; then
               echo "❌ $current_id not in desired state - sending delete"
+              ((deleted++))
               jq -n \
                 --arg id "$current_id" \
                 --arg op "delete" \
@@ -85,3 +112,9 @@ jobs:
                   -d @-
             fi
           done
+
+          echo "✅ Sync Complete"
+          echo "Created: $created"
+          echo "Updated: $updated"
+          echo "Skipped: $skipped"
+          echo "Deleted: $deleted"
