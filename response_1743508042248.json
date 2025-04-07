@@ -1,113 +1,9 @@
 [
-  {
-     "owner": "admin",
-     "locked": true,
-     "distro_series": "9.4",
-     "hostname": "wombat2",
-     "power_state": "on",
-     "osystem": "rocky",
-     "status_name": "Deployed",
-     "fqdn": "wombat2.scalar",
-     "system_id": "868rsg",
-     "status_message": "Node USB Device hardware sync state chage - usb device 3 was added on node 868rsg",
-     "zone": "RACK07",
-     "pool": "Lab-IT",
-     "rack": "07",
-     "supports_eth_ha": false,
-     "supports_ib_ha": false,
-     "tags": [
-       "MaaS_wombat",
-       "MaaS_Lab-IT",
-       "MaaS_rack_07"
-     ],
-     "IPs": [
-       "172.31.0.21",
-       "10.100.0.21"
-     ]
-   },
    {
      "owner": "admin",
      "locked": true,
      "distro_series": "9.4",
-     "hostname": "wombat3",
-     "power_state": "on",
-     "osystem": "rocky",
-     "status_name": "Deployed",
-     "fqdn": "wombat3.scalar",
-     "system_id": "taytnk",
-     "status_message": "Node USB Device hardware sync state chage - usb device 3 was added on node taytnk",
-     "zone": "RACK07",
-     "pool": "Lab-IT",
-     "rack": "07",
-     "supports_eth_ha": false,
-     "supports_ib_ha": false,
-     "tags": [
-       "MaaS_wombat",
-       "MaaS_Lab-IT",
-       "MaaS_rack_07"
-     ],
-     "IPs": [
-       "172.31.0.22",
-       "10.100.0.22"
-     ]
-   },
-   {
-     "owner": "admin",
-     "locked": true,
-     "distro_series": "9.4",
-     "hostname": "wombat4",
-     "power_state": "on",
-     "osystem": "rocky",
-     "status_name": "Deployed",
-     "fqdn": "wombat4.scalar",
-     "system_id": "7my7rq",
-     "status_message": "Node USB Device hardware sync state chage - usb device 3 was added on node 7my7rq",
-     "zone": "RACK07",
-     "pool": "Lab-IT",
-     "rack": "07",
-     "supports_eth_ha": false,
-     "supports_ib_ha": false,
-     "tags": [
-       "MaaS_wombat",
-       "MaaS_Lab-IT",
-       "MaaS_rack_07"
-     ],
-     "IPs": [
-       "172.31.0.23",
-       "10.100.0.23"
-     ]
-   },
-   {
-     "owner": "admin",
-     "locked": true,
-     "distro_series": "9.4",
-     "hostname": "wombat5",
-     "power_state": "on",
-     "osystem": "rocky",
-     "status_name": "Deployed",
-     "fqdn": "wombat5.scalar",
-     "system_id": "nc43p3",
-     "status_message": "Node USB Device hardware sync state chage - usb device 3 was added on node nc43p3",
-     "zone": "RACK07",
-     "pool": "Lab-IT",
-     "rack": "07",
-     "supports_eth_ha": false,
-     "supports_ib_ha": false,
-     "tags": [
-       "MaaS_wombat",
-       "MaaS_Lab-IT",
-       "MaaS_rack_07"
-     ],
-     "IPs": [
-       "172.31.0.24",
-       "10.100.0.24"
-     ]
-   },
-   {
-     "owner": "admin",
-     "locked": true,
-     "distro_series": "9.4",
-     "hostname": "wombat6",
+     "hostname": "aaaaaaa",
      "power_state": "on",
      "osystem": "rocky",
      "status_name": "Deployed",
@@ -133,7 +29,7 @@
      "owner": "admin",
      "locked": true,
      "distro_series": "9.4",
-     "hostname": "wombat7",
+     "hostname": "bbbbbb",
      "power_state": "on",
      "osystem": "rocky",
      "status_name": "Deployed",
@@ -159,7 +55,7 @@
      "owner": "admin",
      "locked": true,
      "distro_series": "9.4",
-     "hostname": "wombat8",
+     "hostname": "ccccc",
      "power_state": "on",
      "osystem": "rocky",
      "status_name": "Deployed",
