@@ -35,7 +35,9 @@ jobs:
           echo "PORT_ACCESS_TOKEN=$token" >> $GITHUB_ENV
 
       - name: Fetch new source (replace with API call if needed)
-        run: cp response_1743508042248.json new_source.json
+        run: |
+          cat response_1743508042248.json
+          cp response_1743508042248.json new_source.json
 
       - name: Prepare lookup maps
         run: |
