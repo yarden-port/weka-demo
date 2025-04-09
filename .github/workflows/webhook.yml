@@ -1,4 +1,4 @@
-name: Sync Port Entities via Webhook with Local Caching
+name: Sync Port Entities via Webhook with Local Caching + Debug
 
 on:
   workflow_dispatch:
@@ -36,6 +36,7 @@ jobs:
 
       - name: Fetch new source (replace with API call if needed)
         run: |
+          echo "📥 Using local source file"
           cat response_1743508042248.json
           cp response_1743508042248.json new_source.json
 
@@ -43,6 +44,15 @@ jobs:
         run: |
           jq -c 'map({(.system_id): .}) | add' new_source.json > new_map.json
           [ -f last_sync.json ] && jq -c 'map({(.system_id): .}) | add' last_sync.json > old_map.json || echo '{}' > old_map.json
+
+      - name: Preview input and map keys
+        run: |
+          echo "🔍 Entries in new source: $(jq 'length' new_source.json)"
+          echo "🆚 Entries in last sync file: $(jq 'length' last_sync.json || echo 0)"
+          echo "🔑 New map keys:"
+          jq 'keys' new_map.json
+          echo "🔑 Old map keys:"
+          jq 'keys' old_map.json
 
       - name: Sync using cached diff
         env:
@@ -81,8 +91,9 @@ jobs:
               fi
             fi
 
-            echo "$new_block" | jq --arg op "$op" '. + {operation: $op}' | \
-              curl -s -X POST "$PORT_WEBHOOK_URL" \
+            # Show payload and response
+            echo "$new_block" | jq --arg op "$op" '. + {operation: $op}' | tee payload.json | \
+              curl -s -w "\nHTTP %{http_code}\n" -X POST "$PORT_WEBHOOK_URL" \
                 -H "Content-Type: application/json" \
                 -d @-
           done < <(echo "$new_map" | jq -c 'to_entries[]')
@@ -92,12 +103,14 @@ jobs:
             if ! echo "$new_map" | jq -e --arg id "$old_id" 'has($id)' > /dev/null; then
               echo "❌ $old_id - sending delete"
               count=$(cat deleted.count); echo $((count + 1)) > deleted.count
+
               jq -n --arg id "$old_id" --arg op "delete" '{
                 system_id: $id,
                 operation: $op
-              }' | curl -s -X POST "$PORT_WEBHOOK_URL" \
-                  -H "Content-Type: application/json" \
-                  -d @-
+              }' | tee payload.json | \
+              curl -s -w "\nHTTP %{http_code}\n" -X POST "$PORT_WEBHOOK_URL" \
+                -H "Content-Type: application/json" \
+                -d @-
             fi
           done < <(echo "$old_map" | jq -r 'keys[]')
 
