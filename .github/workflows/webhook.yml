@@ -15,13 +15,13 @@ jobs:
         run: sudo apt-get install -y jq
 
       - name: Restore previous source cache
-        id: cache-prev
+        id: restore-cache
         uses: actions/cache@v3
         with:
           path: last_sync.json
-          key: port-sync-cache-${{ runner.os }}
+          key: port-sync-cache-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |
-            port-sync-cache-
+            port-sync-cache-${{ runner.os }}-
 
       - name: Get Port Access Token
         id: get-token
@@ -101,10 +101,9 @@ jobs:
       - name: Save current source as last_sync.json
         run: cp new_source.json last_sync.json
 
-      - name: Cache current source
+      - name: Save updated cache
+        if: steps.restore-cache.outputs.cache-hit != 'true'
         uses: actions/cache@v3
         with:
           path: last_sync.json
           key: port-sync-cache-${{ runner.os }}-${{ github.run_id }}
-          restore-keys: |
-            port-sync-cache-${{ runner.os }}-
