@@ -1,61 +1,114 @@
-- name: Sync using cached diff
-  env:
-    PORT_WEBHOOK_URL: https://ingest.getport.io/N29knvwPStVAcYnu
-  run: |
-    set -e
-    trap '' SIGPIPE
+name: Sync Port Entities via Webhook with Local Caching
 
-    # Init counters
-    echo 0 > created.count
-    echo 0 > updated.count
-    echo 0 > deleted.count
+on:
+  workflow_dispatch:
 
-    new_map=$(cat new_map.json)
-    old_map=$(cat old_map.json)
+jobs:
+  sync-port-webhook:
+    runs-on: ubuntu-latest
 
-    # Create/Update loop
-    while read -r entry; do
-      id=$(echo "$entry" | jq -r '.key')
-      new_block=$(echo "$entry" | jq -c '.value')
-      old_block=$(echo "$old_map" | jq -c --arg id "$id" '.[$id] // empty')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
 
-      if [ -z "$old_block" ] || [ "$old_block" = "null" ]; then
-        echo "🆕 $id - creating"
-        count=$(cat created.count); echo $((count + 1)) > created.count
-        op="create/update"
-      else
-        new_hash=$(echo "$new_block" | jq -S . | sha256sum | cut -d " " -f1)
-        old_hash=$(echo "$old_block" | jq -S . | sha256sum | cut -d " " -f1)
-        if [ "$new_hash" != "$old_hash" ]; then
-          echo "🔁 $id - updating"
-          count=$(cat updated.count); echo $((count + 1)) > updated.count
-          op="create/update"
-        else
-          continue
-        fi
-      fi
+      - name: Set up jq
+        run: sudo apt-get install -y jq
 
-      echo "$new_block" | jq --arg op "$op" '. + {operation: $op}' | \
-        curl -s -X POST "$PORT_WEBHOOK_URL" \
-          -H "Content-Type: application/json" \
-          -d @-
-    done < <(echo "$new_map" | jq -c 'to_entries[]')
+      - name: Restore previous source cache
+        id: cache-prev
+        uses: actions/cache@v3
+        with:
+          path: last_sync.json
+          key: port-sync-cache-${{ runner.os }}
+          restore-keys: |
+            port-sync-cache-
 
-    # Deletion loop
-    while read -r old_id; do
-      if ! echo "$new_map" | jq -e --arg id "$old_id" 'has($id)' > /dev/null; then
-        echo "❌ $old_id - sending delete"
-        count=$(cat deleted.count); echo $((count + 1)) > deleted.count
-        jq -n --arg id "$old_id" --arg op "delete" '{
-          system_id: $id,
-          operation: $op
-        }' | curl -s -X POST "$PORT_WEBHOOK_URL" \
-            -H "Content-Type: application/json" \
-            -d @-
-      fi
-    done < <(echo "$old_map" | jq -r 'keys[]')
+      - name: Get Port Access Token
+        id: get-token
+        run: |
+          token=$(curl -s -X POST 'https://api.getport.io/v1/auth/access_token' \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "clientId": "${{ secrets.PORT_CLIENT_ID }}",
+              "clientSecret": "${{ secrets.PORT_CLIENT_SECRET }}"
+            }' | jq -r '.accessToken')
+          echo "PORT_ACCESS_TOKEN=$token" >> $GITHUB_ENV
 
-    echo "✅ Sync complete"
-    echo "Created: $(cat created.count)"
-    echo "Updated: $(cat updated.count)"
-    echo "Deleted: $(cat deleted.count)"
+      - name: Fetch new source (replace with API call if needed)
+        run: cp response_1743508042248.json new_source.json
+
+      - name: Prepare lookup maps
+        run: |
+          jq -c 'map({(.system_id): .}) | add' new_source.json > new_map.json
+          [ -f last_sync.json ] && jq -c 'map({(.system_id): .}) | add' last_sync.json > old_map.json || echo '{}' > old_map.json
+
+      - name: Sync using cached diff
+        env:
+          PORT_WEBHOOK_URL: https://ingest.getport.io/N29knvwPStVAcYnu
+        run: |
+          set -e
+          trap '' SIGPIPE
+
+          # Initialize counters
+          echo 0 > created.count
+          echo 0 > updated.count
+          echo 0 > deleted.count
+
+          new_map=$(cat new_map.json)
+          old_map=$(cat old_map.json)
+
+          # Create/Update loop
+          while read -r entry; do
+            id=$(echo "$entry" | jq -r '.key')
+            new_block=$(echo "$entry" | jq -c '.value')
+            old_block=$(echo "$old_map" | jq -c --arg id "$id" '.[$id] // empty')
+
+            if [ -z "$old_block" ] || [ "$old_block" = "null" ]; then
+              echo "🆕 $id - creating"
+              count=$(cat created.count); echo $((count + 1)) > created.count
+              op="create/update"
+            else
+              new_hash=$(echo "$new_block" | jq -S . | sha256sum | cut -d " " -f1)
+              old_hash=$(echo "$old_block" | jq -S . | sha256sum | cut -d " " -f1)
+              if [ "$new_hash" != "$old_hash" ]; then
+                echo "🔁 $id - updating"
+                count=$(cat updated.count); echo $((count + 1)) > updated.count
+                op="create/update"
+              else
+                continue
+              fi
+            fi
+
+            echo "$new_block" | jq --arg op "$op" '. + {operation: $op}' | \
+              curl -s -X POST "$PORT_WEBHOOK_URL" \
+                -H "Content-Type: application/json" \
+                -d @-
+          done < <(echo "$new_map" | jq -c 'to_entries[]')
+
+          # Deletion loop
+          while read -r old_id; do
+            if ! echo "$new_map" | jq -e --arg id "$old_id" 'has($id)' > /dev/null; then
+              echo "❌ $old_id - sending delete"
+              count=$(cat deleted.count); echo $((count + 1)) > deleted.count
+              jq -n --arg id "$old_id" --arg op "delete" '{
+                system_id: $id,
+                operation: $op
+              }' | curl -s -X POST "$PORT_WEBHOOK_URL" \
+                  -H "Content-Type: application/json" \
+                  -d @-
+            fi
+          done < <(echo "$old_map" | jq -r 'keys[]')
+
+          echo "✅ Sync complete"
+          echo "Created: $(cat created.count)"
+          echo "Updated: $(cat updated.count)"
+          echo "Deleted: $(cat deleted.count)"
+
+      - name: Save current source as last_sync.json
+        run: cp new_source.json last_sync.json
+
+      - name: Cache current source
+        uses: actions/cache@v3
+        with:
+          path: last_sync.json
+          key: port-sync-cache-${{ runner.os }}
