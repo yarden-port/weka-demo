@@ -1,10 +1,10 @@
-name: Sync Port Entities via Webhook with Local Caching + Debug
+name: One-Time Full Sync to Port
 
 on:
   workflow_dispatch:
 
 jobs:
-  sync-port-webhook:
+  one-time-sync:
     runs-on: ubuntu-latest
 
     steps:
@@ -13,15 +13,6 @@ jobs:
 
       - name: Set up jq
         run: sudo apt-get install -y jq
-
-      - name: Restore previous source cache
-        id: cache-prev
-        uses: actions/cache@v3
-        with:
-          path: last_sync.json
-          key: port-sync-cache-${{ runner.os }}
-          restore-keys: |
-            port-sync-cache-
 
       - name: Get Port Access Token
         id: get-token
@@ -34,96 +25,17 @@ jobs:
             }' | jq -r '.accessToken')
           echo "PORT_ACCESS_TOKEN=$token" >> $GITHUB_ENV
 
-      - name: Fetch new source (replace with API call if needed)
-        run: |
-          echo "📥 Using local source file"
-          cat response_1743508042248.json
-          cp response_1743508042248.json new_source.json
-
-      - name: Prepare lookup maps
-        run: |
-          jq -c 'map({(.system_id): .}) | add' new_source.json > new_map.json
-          [ -f last_sync.json ] && jq -c 'map({(.system_id): .}) | add' last_sync.json > old_map.json || echo '{}' > old_map.json
-
-      - name: Preview input and map keys
-        run: |
-          echo "🔍 Entries in new source: $(jq 'length' new_source.json)"
-          echo "🆚 Entries in last sync file: $(jq 'length' last_sync.json || echo 0)"
-          echo "🔑 New map keys:"
-          jq 'keys' new_map.json
-          echo "🔑 Old map keys:"
-          jq 'keys' old_map.json
-
-      - name: Sync using cached diff
+      - name: Push all entities to Port (force create/update)
         env:
           PORT_WEBHOOK_URL: https://ingest.getport.io/N29knvwPStVAcYnu
         run: |
           set -e
           trap '' SIGPIPE
 
-          # Initialize counters
-          echo 0 > created.count
-          echo 0 > updated.count
-          echo 0 > deleted.count
-
-          new_map=$(cat new_map.json)
-          old_map=$(cat old_map.json)
-
-          # Create/Update loop
-          while read -r entry; do
-            id=$(echo "$entry" | jq -r '.key')
-            new_block=$(echo "$entry" | jq -c '.value')
-            old_block=$(echo "$old_map" | jq -c --arg id "$id" '.[$id] // empty')
-
-            if [ -z "$old_block" ] || [ "$old_block" = "null" ]; then
-              echo "🆕 $id - creating"
-              count=$(cat created.count); echo $((count + 1)) > created.count
-              op="create/update"
-            else
-              new_hash=$(echo "$new_block" | jq -S . | sha256sum | cut -d " " -f1)
-              old_hash=$(echo "$old_block" | jq -S . | sha256sum | cut -d " " -f1)
-              if [ "$new_hash" != "$old_hash" ]; then
-                echo "🔁 $id - updating"
-                count=$(cat updated.count); echo $((count + 1)) > updated.count
-                op="create/update"
-              else
-                continue
-              fi
-            fi
-
-            # Show payload and response
-            echo "$new_block" | jq --arg op "$op" '. + {operation: $op}' | tee payload.json | \
+          jq -c '.[]' response_1743508042248.json | while read -r block; do
+            echo "🚀 Syncing entity..."
+            echo "$block" | jq --arg op "create/update" '. + {operation: $op}' | tee payload.json | \
               curl -s -w "\nHTTP %{http_code}\n" -X POST "$PORT_WEBHOOK_URL" \
                 -H "Content-Type: application/json" \
                 -d @-
-          done < <(echo "$new_map" | jq -c 'to_entries[]')
-
-          # Deletion loop
-          while read -r old_id; do
-            if ! echo "$new_map" | jq -e --arg id "$old_id" 'has($id)' > /dev/null; then
-              echo "❌ $old_id - sending delete"
-              count=$(cat deleted.count); echo $((count + 1)) > deleted.count
-
-              jq -n --arg id "$old_id" --arg op "delete" '{
-                system_id: $id,
-                operation: $op
-              }' | tee payload.json | \
-              curl -s -w "\nHTTP %{http_code}\n" -X POST "$PORT_WEBHOOK_URL" \
-                -H "Content-Type: application/json" \
-                -d @-
-            fi
-          done < <(echo "$old_map" | jq -r 'keys[]')
-
-          echo "✅ Sync complete"
-          echo "Created: $(cat created.count)"
-          echo "Updated: $(cat updated.count)"
-          echo "Deleted: $(cat deleted.count)"
-
-      - name: Save current source as last_sync.json
-        run: cp new_source.json last_sync.json
-
-      - name: Cache current source
-        uses: actions/cache@v3
-        with:
-          path: last_sync.json
-          key: port-sync-cache-${{ runner.os }}
+          done
