@@ -49,9 +49,10 @@ jobs:
           set -e
           trap '' SIGPIPE
 
-          created=0
-          updated=0
-          deleted=0
+          # Initialize counter files
+          echo 0 > created.count
+          echo 0 > updated.count
+          echo 0 > deleted.count
 
           new_map=$(cat new_map.json)
           old_map=$(cat old_map.json)
@@ -64,14 +65,14 @@ jobs:
 
               if [ -z "$old_block" ] || [ "$old_block" = "null" ]; then
                 echo "🆕 $id - creating"
-                ((created++))
+                c=$(cat created.count); echo $((c+1)) > created.count
                 op="create/update"
               else
                 new_hash=$(echo "$new_block" | jq -S . | sha256sum | cut -d " " -f1)
                 old_hash=$(echo "$old_block" | jq -S . | sha256sum | cut -d " " -f1)
                 if [ "$new_hash" != "$old_hash" ]; then
                   echo "🔁 $id - updating"
-                  ((updated++))
+                  c=$(cat updated.count); echo $((c+1)) > updated.count
                   op="create/update"
                 else
                   continue
@@ -89,7 +90,7 @@ jobs:
             echo "$old_map" | jq -r 'keys[]' | while read -r old_id; do
               if ! echo "$new_map" | jq -e --arg id "$old_id" 'has($id)' > /dev/null; then
                 echo "❌ $old_id - sending delete"
-                ((deleted++))
+                c=$(cat deleted.count); echo $((c+1)) > deleted.count
                 jq -n --arg id "$old_id" --arg op "delete" '{
                   system_id: $id,
                   operation: $op
@@ -101,9 +102,9 @@ jobs:
           } || true
 
           echo "✅ Sync complete"
-          echo "Created: $created"
-          echo "Updated: $updated"
-          echo "Deleted: $deleted"
+          echo "Created: $(cat created.count)"
+          echo "Updated: $(cat updated.count)"
+          echo "Deleted: $(cat deleted.count)"
 
       - name: Save current source as last_sync.json
         run: cp new_source.json last_sync.json
